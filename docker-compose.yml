@@ -1,0 +1,15 @@
+services:
+  sdk:
+    build: .
+    # Mount the repo root into /work so the cross-compiler can read
+    # source files and write build artifacts (build/, .nds ROM) back
+    # to the host filesystem.
+    volumes:
+      - .:/work
+    # working_dir matches the volume mount point, so make commands
+    # run from the project root inside the container.
+    working_dir: /work
+    # Resolve host.docker.internal to the host IP so GDB inside Docker
+    # can connect to melonDS running on the host machine.
+    extra_hosts:
+      - "host.docker.internal:host-gateway"

@@ -1,0 +1,192 @@
+# SPDX-License-Identifier: GPL-2.0-only
+#
+# Chocolate Doom DS - NDS port
+# Built with BlocksDS
+
+export BLOCKSDS		?= /opt/blocksds/core
+export BLOCKSDSEXT	?= /opt/blocksds/external
+
+export WONDERFUL_TOOLCHAIN	?= /opt/wonderful
+ARM_NONE_EABI_PATH	?= $(WONDERFUL_TOOLCHAIN)/toolchain/gcc-arm-none-eabi/bin/
+
+# User config
+# ===========
+
+NAME		:= chexquest
+
+GAME_TITLE	:= Chex Quest
+GAME_SUBTITLE	:= Doom per Nintendo DS
+GAME_AUTHOR	:= Chex Quest DS
+GAME_ICON	:= icon_chex.png
+
+# Source code paths
+# -----------------
+
+# SOURCES_SHARED: portable Chocolate Doom C files with no SDL dependency.
+# These compile unmodified on NDS because they use only C stdlib and
+# Doom-internal APIs. SDL-dependent files (i_video.c, i_sound.c, etc.)
+# are excluded and replaced by NDS equivalents in SOURCES_NDS.
+SOURCES_SHARED := \
+	src/d_event.c src/d_iwad.c src/d_loop.c src/d_mode.c \
+	src/deh_io.c src/deh_main.c src/deh_mapping.c src/deh_str.c src/deh_text.c \
+	src/m_argv.c src/m_bbox.c src/m_cheat.c src/m_config.c src/m_controls.c \
+	src/m_fixed.c src/m_misc.c src/memio.c \
+	src/mus2mid.c src/sha1.c src/tables.c \
+	src/v_diskicon.c src/v_video.c \
+	src/w_checksum.c src/w_file.c src/w_file_stdc.c src/w_main.c src/w_merge.c src/w_wad.c \
+	src/z_zone.c \
+	src/p_rejectpad.c \
+	src/net_client.c src/net_common.c src/net_dedicated.c \
+	src/net_io.c src/net_loop.c src/net_packet.c src/net_petname.c \
+	src/net_query.c src/net_server.c src/net_structrw.c \
+	src/aes_prng.c
+
+# SOURCES_DOOM: wildcard for all doom/*.c files. These contain the game
+# logic (renderer, physics, AI, map loading) with zero platform code.
+SOURCES_DOOM := $(wildcard src/doom/*.c)
+
+# SOURCES_NDS: wildcard for all nds/*.c files. This is the NDS platform
+# layer that replaces SDL's i_*.c files with libnds equivalents for
+# video, input, audio, and timer.
+SOURCES_NDS := $(wildcard src/nds/*.c)
+
+SOURCES_C	:= $(SOURCES_SHARED) $(SOURCES_DOOM) $(SOURCES_NDS)
+
+# INCLUDEDIRS: sdl_shim provides SDL.h stubs that replace system SDL
+# headers. When Chocolate Doom code does #include "SDL.h", the compiler
+# finds src/sdl_shim/SDL.h instead of a real SDL installation.
+INCLUDEDIRS	:= src src/doom src/sdl_shim
+GFXDIRS		:=
+BINDIRS		:=
+AUDIODIRS	:=
+NITROFSDIR	:= nitrofs
+
+# Defines
+# -------
+
+# __NDS__ enables NDS-specific #ifdef blocks in shared Chocolate Doom
+# code, allowing conditional compilation for platform differences.
+DEFINES		:= -D__NDS__
+
+# Libraries
+# ---------
+
+# ARM7ELF: custom ARM7 binary built from arm7/source/main.c. Not a
+# pre-built binary. The ARM7 handles audio mixing via MaxMod and
+# touchscreen/WiFi hardware.
+ARM7ELF		:= arm7/build/arm7.elf
+
+LIBS		:= -lmm9 -lnds9
+LIBDIRS		+= $(BLOCKSDS)/libs/maxmod \
+		   $(BLOCKSDS)/libs/libnds
+
+# Build artifacts
+# ---------------
+
+BUILDDIR	:= build/$(NAME)
+ELF		:= build/$(NAME).elf
+MAP		:= build/$(NAME).map
+ROM		:= $(NAME).nds
+
+# Tools
+# -----
+
+PREFIX		:= $(ARM_NONE_EABI_PATH)arm-none-eabi-
+CC		:= $(PREFIX)gcc
+LD		:= $(PREFIX)gcc
+MKDIR		:= mkdir
+RM		:= rm -rf
+
+# Verbose flag
+# ------------
+
+ifeq ($(VERBOSE),1)
+V		:=
+else
+V		:= @
+endif
+
+# Compiler and linker flags
+# -------------------------
+
+# ARCH flags:
+#   -mthumb        = generate 16-bit Thumb ISA instructions (smaller code,
+#                    fits better in NDS 32KB instruction cache)
+#   -mcpu=arm946e-s = target the NDS main CPU (ARM946E-S, ARMv5TE)
+#   +nofp          = no hardware FPU, use software float. The ARM946E-S
+#                    has no floating-point unit
+ARCH		:= -mthumb -mcpu=arm946e-s+nofp
+
+# SPECS: ds_arm9.specs is the NDS ARM9 linker script from BlocksDS.
+# Defines the memory map (DTCM, ITCM, main RAM), entry point, and
+# section placement for the ARM9 binary.
+SPECS		:= $(BLOCKSDS)/sys/crts/dsi_arm9.specs
+
+WARNFLAGS	:= -Wall -Wextra -Wno-unused-parameter -Wno-missing-field-initializers \
+		   -Wno-sign-compare -Wno-pointer-sign
+
+LIBS		+= -lc
+
+INCLUDEFLAGS	:= $(foreach path,$(INCLUDEDIRS),-I$(path)) \
+		   $(foreach path,$(LIBDIRS),-I$(path)/include)
+
+LIBDIRSFLAGS	:= $(foreach path,$(LIBDIRS),-L$(path)/lib)
+
+# -ffast-math: enables unsafe FP optimizations (no NaN/Inf checks,
+# reordering). Acceptable here because Doom uses fixed-point math
+# for gameplay. The few float operations (e.g. lookup tables) do not
+# depend on strict IEEE 754 behavior.
+CFLAGS		:= -std=gnu11 $(WARNFLAGS) $(INCLUDEFLAGS) $(DEFINES) \
+		   $(ARCH) -O2 -g -ffunction-sections -fdata-sections \
+		   -ffast-math -specs=$(SPECS)
+
+LDFLAGS		:= $(ARCH) $(LIBDIRSFLAGS) -Wl,-Map,$(MAP) $(DEFINES) \
+		   -Wl,--start-group $(LIBS) -Wl,--end-group -specs=$(SPECS)
+
+# Intermediate build files
+# ------------------------
+
+OBJS		:= $(addprefix $(BUILDDIR)/,$(SOURCES_C:.c=.o))
+DEPS		:= $(OBJS:.o=.d)
+
+# Targets
+# -------
+
+.PHONY: all clean
+
+all: $(ROM)
+
+ifeq ($(strip $(GAME_SUBTITLE)),)
+    GAME_FULL_TITLE := $(GAME_TITLE);$(GAME_AUTHOR)
+else
+    GAME_FULL_TITLE := $(GAME_TITLE);$(GAME_SUBTITLE);$(GAME_AUTHOR)
+endif
+
+# NDSTOOL: combines the ARM7 and ARM9 ELF binaries into a single .nds
+# ROM file. The -b flag sets the icon, and the title string contains
+# the game name, subtitle, and author shown in the DS menu.
+$(ROM): $(ELF)
+	@echo "  NDSTOOL $@"
+	$(V)$(BLOCKSDS)/tools/ndstool/ndstool -c $@ \
+		-7 $(ARM7ELF) -9 $(ELF) \
+		-b $(GAME_ICON) "$(GAME_FULL_TITLE)" \
+		$(if $(wildcard $(NITROFSDIR)/chex.wad),-d $(NITROFSDIR),) \
+		-uc 2
+
+$(ELF): $(OBJS)
+	@echo "  LD      $@"
+	$(V)$(LD) -o $@ $(OBJS) $(LDFLAGS)
+
+clean:
+	@echo "  CLEAN"
+	$(V)$(RM) $(ROM) build
+
+# Rules
+# -----
+
+$(BUILDDIR)/%.o : %.c
+	@echo "  CC      $<"
+	@$(MKDIR) -p $(@D)
+	$(V)$(CC) $(CFLAGS) -MMD -MP -c -o $@ $<
+
+-include $(DEPS)
