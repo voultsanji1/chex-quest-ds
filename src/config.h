@@ -1,11 +1,8 @@
 /* Minimal config.h for the Nintendo DS (BlocksDS) build of Chex Quest DS.
  *
- * The upstream Chocolate Doom build generates this file with autoconf. The
- * NDS platform layer and the (unmodified) Doom engine only reference a couple
- * of the PACKAGE_* / VERSION macros at runtime; no feature-detection macros
- * (HAVE_*, SIZEOF_*) are actually used by the code that gets compiled for the
- * DS. Those optional features (FluidSynth, libsamplerate, libpng, ...) are
- * intentionally left undefined because the DS build does not link them.
+ * Derived from cmake/config.h.cin. The optional feature libraries
+ * (FluidSynth, libsamplerate, libpng) and mmap are not available on the
+ * DS and are left undefined so the engine uses its fallback paths.
  */
 
 #ifndef CONFIG_H
@@ -17,10 +14,11 @@
 #define PACKAGE_STRING "Chex Quest DS 0.2.0"
 #define PACKAGE_BUGREPORT ""
 #define PACKAGE_URL ""
+#define PROGRAM_PREFIX ""
 
 #define VERSION "0.2.0"
 
-/* Standard C headers are available on the DS toolchain. */
+/* Standard C headers available on the DS toolchain (newlib). */
 #define STDC_HEADERS 1
 #define HAVE_STDINT_H 1
 #define HAVE_STDLIB_H 1
@@ -31,5 +29,16 @@
 #define HAVE_SYS_STAT_H 1
 #define HAVE_UNISTD_H 1
 #define HAVE_DIRENT_H 1
+
+/* newlib declares str[n]casecmp (in <strings.h>), so the engine's
+ * Windows fallback (stricmp/strnicmp) must stay disabled. */
+#define HAVE_DECL_STRCASECMP 1
+#define HAVE_DECL_STRNCASECMP 1
+
+/* Disabled optional features (absent on the DS): */
+/* #undef HAVE_FLUIDSYNTH */
+/* #undef HAVE_LIBSAMPLERATE */
+/* #undef HAVE_LIBPNG */
+/* #undef HAVE_MMAP */
 
 #endif /* CONFIG_H */
