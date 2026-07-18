@@ -969,7 +969,14 @@ void G_Ticker (void)
 	    break; 
 	} 
     }
-    
+
+    // After any game action that may have been triggered from a menu (save,
+    // load, new game, level complete, ...) the input state can be left with
+    // a key still considered held (the A button used to confirm the menu,
+    // or a direction key). Reset the backend input so the player does not
+    // freeze or fire a spurious shot when control returns to gameplay.
+    I_ClearInput();
+
     // get commands, check consistancy,
     // and build new consistancy check
     buf = (gametic/ticdup)%BACKUPTICS; 

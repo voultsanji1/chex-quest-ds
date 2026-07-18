@@ -74,24 +74,20 @@ int joystick_turn_sensitivity = 0;
 //
 //   Y -> quick weapon cycle (next owned weapon)
 //     Doom uses number keys 1-9 for weapon selection. With limited
-//     buttons there is no room for nine direct bindings, so Y advances
-//     to the next owned weapon. For full bidirectional selection the
-//     player opens the bottom-screen weapon menu with SELECT and taps
-//     (or navigates with D-pad + A) the desired weapon.
+//     buttons there is no room for nine direct bindings, so L / R cycle
+//     to the previous / next owned weapon.
 //
-//   L -> ',' (strafe left)
-//   R -> '.' (strafe right)
-//     Comma and period are Doom's default strafe keys. The shoulder
-//     buttons are ideal for strafing because they can be held while
-//     the thumb uses the D-pad for forward/backward/turning.
+//   L -> previous owned weapon
+//   R -> next owned weapon
+//     Handled directly in I_StartTic (not bound to strafe keys) so the
+//     shoulder buttons switch weapons only, without strafing.
 //
 //   START -> KEY_ESCAPE (open/close menu)
 //     Standard console convention: START opens the pause/options menu.
 //
-//   SELECT -> open/close the bottom-screen weapon menu
-//     SELECT toggles an on-screen weapon list drawn on the touch screen.
-//     This replaces the old TAB-automap binding; weapon switching is the
-//     most common action that needed more than a single button.
+//   SELECT -> KEY_TAB (open/close the original Doom automap)
+//     TAB is Chocolate Doom's default map-toggle key; the automap renders
+//     on the main (top) screen as on every other platform.
 // -----------------------------------------------------------------------
 typedef struct
 {
@@ -107,9 +103,11 @@ static const keymap_t keymap[] = {
 	{ KEY_A,      KEY_RCTRL },     // Fire
 	{ KEY_B,      ' ' },           // Use/Open (space)
 	{ KEY_X,      KEY_RSHIFT },    // Run
-	{ KEY_L,      ',' },           // Strafe left
-	{ KEY_R,      '.' },           // Strafe right
 	{ KEY_START,  KEY_ESCAPE },    // Menu
+	// NOTE: L / R are intentionally NOT in this table. They are handled
+	// separately as weapon next/previous switches and must not also emit
+	// the strafe keys (',' / '.') or the player would strafe while
+	// switching weapons.
 };
 
 #define NUM_KEYMAPS (sizeof(keymap) / sizeof(keymap[0]))
@@ -126,11 +124,6 @@ static const keymap_t keymap[] = {
 	static int touch_down_x = 0;
 	static int touch_down_y = 0;
 	static boolean touch_dragged = false;
-
-// Bottom-screen automap state. When active, the sub (bottom) screen shows
-// an ASCII minimap of the current level instead of the diagnostic HUD.
-// Toggled by SELECT.
-static boolean automap_active = false;
 
 // True while the player holds L or R, so we only switch once per press
 // (the engine's weapon cycle is edge-triggered anyway, but this keeps the
@@ -258,45 +251,18 @@ void I_StartTic(void)
 
 	event_t ev;
 
-	// SELECT toggles the bottom-screen automap (ASCII minimap). While it
-	// is shown, gameplay input is suppressed so the player can study the
-	// map without moving.
+	// SELECT opens/closes the original Doom automap (the game's own
+	// full-screen map, drawn by am_map.c). KEY_TAB is the default
+	// map-toggle key in Chocolate Doom. The automap renders on the main
+	// (top) screen like on every other platform.
 	if (pressed & KEY_SELECT)
 	{
-		automap_active = !automap_active;
-		NDS_Panel_SetAutomap(automap_active);
-		if (!automap_active)
-			NDS_Panel_ForceGameplayRedraw();
-		else
-		{
-			// Release any gameplay keys that were held when the map
-			// opened so the player stops moving/firing while reading it.
-			event_t ev;
-			for (unsigned int i = 0; i < NUM_KEYMAPS; i++)
-			{
-				if (held & keymap[i].nds_key)
-				{
-					ev.type = ev_keyup;
-					ev.data1 = keymap[i].doom_key;
-					ev.data2 = ev.data3 = 0;
-					D_PostEvent(&ev);
-				}
-			}
-			if (held & KEY_A)
-			{
-				ev.type = ev_keyup;
-				ev.data1 = KEY_ENTER;
-				ev.data2 = ev.data3 = 0;
-				D_PostEvent(&ev);
-			}
-		}
-	}
-
-	if (automap_active)
-	{
-		// The automap consumes all other input this frame; the
-		// touch-turn handler below is skipped while it is open.
-		return;
+		ev.type = ev_keydown;
+		ev.data1 = KEY_TAB;
+		ev.data2 = ev.data3 = 0;
+		D_PostEvent(&ev);
+		ev.type = ev_keyup;
+		D_PostEvent(&ev);
 	}
 
 	for (unsigned int i = 0; i < NUM_KEYMAPS; i++)

@@ -188,12 +188,9 @@ void I_FinishUpdate(void)
 		dest += 512;
 	}
 
-	// Update the bottom (touch) screen: the automap when active, else
-	// the diagnostic HUD, after the top screen framebuffer is uploaded.
-	if (NDS_Panel_GameplayActive() && NDS_Panel_AutomapActive())
-		NDS_Panel_DrawAutomap();
-	else
-		NDS_Panel_DrawGameplay();
+	// Update the bottom (touch) screen with the diagnostic HUD after the
+	// top screen framebuffer is uploaded.
+	NDS_Panel_DrawGameplay();
 }
 
 void I_ReadScreen(pixel_t *scr)

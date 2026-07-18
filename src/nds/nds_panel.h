@@ -58,20 +58,8 @@ int NDS_SoundCacheCount(void);
 // Shared by the input layer for weapon cycling.
 #define NDS_NUM_WEAPONS 9
 
-// True once the gameplay HUD has taken over the bottom screen, i.e. it is
-// safe to draw the automap over it.
+// True once the gameplay HUD has taken over the bottom screen.
 boolean NDS_Panel_GameplayActive(void);
-
-// Notify the panel that the automap is (de)activated so the periodic
-// gameplay HUD refresh does not overwrite it.
-void NDS_Panel_SetAutomap(boolean active);
-
-// True if the automap is currently shown on the bottom screen.
-boolean NDS_Panel_AutomapActive(void);
-
-// Draw the bottom-screen ASCII automap of the current level.
-// Returns immediately if the console is not in gameplay mode yet.
-void NDS_Panel_DrawAutomap(void);
 
 // Force the gameplay HUD to redraw on the next frame.
 void NDS_Panel_ForceGameplayRedraw(void);
