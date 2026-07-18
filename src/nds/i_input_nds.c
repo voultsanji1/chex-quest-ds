@@ -127,11 +127,15 @@ static const keymap_t keymap[] = {
 	static int touch_down_y = 0;
 	static boolean touch_dragged = false;
 
-// Weapon menu state. When active, the bottom screen shows the list of
-// weapons and game input (movement, fire, etc.) is suspended so the
-// D-pad/A can drive menu navigation instead.
-static boolean weapon_menu_active = false;
-static int weapon_menu_sel = 0;
+// Bottom-screen automap state. When active, the sub (bottom) screen shows
+// an ASCII minimap of the current level instead of the diagnostic HUD.
+// Toggled by SELECT.
+static boolean automap_active = false;
+
+// True while the player holds L or R, so we only switch once per press
+// (the engine's weapon cycle is edge-triggered anyway, but this keeps the
+// auto-repeat of the hardware from spamming switches every frame).
+static boolean weapon_switch_held = false;
 
 // Build the owned-weapon mask and current weapon slot from the live
 // player structure. Returns the current weapon slot (or -1 before play).
@@ -185,25 +189,43 @@ static void release_pending_weapon_key(void)
 	pending_weapon_keyup = -1;
 }
 
-// Advance weapon_menu_sel to the next owned weapon (direction +1/-1),
-// skipping slots the player does not have. Returns the new selection.
-static int cycle_weapon_sel(int direction, const boolean owned[NDS_NUM_WEAPONS])
+// Reset all NDS input state. Called after a savegame is loaded so that a
+// button still held at the moment of load (e.g. A used to confirm the
+// load) does not leak into gameplay and fire a spurious shot. Also clears
+// any pending weapon keyup so a deferred digit release is not lost.
+void I_ClearInput(void)
 {
+	prev_buttons = 0;
+	touch_active = 0;
+	touch_dragged = false;
+	weapon_switch_held = false;
+	pending_weapon_keyup = -1;
+}
+
+// Find the next/previous owned weapon relative to the current ready weapon.
+// direction is +1 for "next" (R) or -1 for "previous" (L). Returns the slot
+// to select, or -1 if the player owns no weapons at all.
+static int next_owned_weapon(int direction, const boolean owned[NDS_NUM_WEAPONS])
+{
+	int cur = read_weapon_state((boolean[NDS_NUM_WEAPONS]){0});
+	if (cur < 0)
+		cur = 0;
+
 	int count = 0;
 	for (int i = 0; i < NDS_NUM_WEAPONS; i++)
 		if (owned[i])
 			count++;
 	if (count == 0)
-		return weapon_menu_sel;
+		return -1;
 
 	for (int step = 1; step <= NDS_NUM_WEAPONS; step++)
 	{
-		int next = (weapon_menu_sel + direction * step + NDS_NUM_WEAPONS * step)
+		int cand = (cur + direction * step + NDS_NUM_WEAPONS * step)
 		           % NDS_NUM_WEAPONS;
-		if (owned[next])
-			return next;
+		if (owned[cand])
+			return cand;
 	}
-	return weapon_menu_sel;
+	return -1;
 }
 
 // -----------------------------------------------------------------------
@@ -236,19 +258,19 @@ void I_StartTic(void)
 
 	event_t ev;
 
-	// SELECT toggles the bottom-screen weapon menu. While the menu is
-	// open we handle navigation locally and suppress normal gameplay
-	// button mapping so the D-pad drives the menu instead of movement.
+	// SELECT toggles the bottom-screen automap (ASCII minimap). While it
+	// is shown, gameplay input is suppressed so the player can study the
+	// map without moving.
 	if (pressed & KEY_SELECT)
 	{
-		weapon_menu_active = !weapon_menu_active;
-		NDS_Panel_SetWeaponMenu(weapon_menu_active);
-		if (!weapon_menu_active)
+		automap_active = !automap_active;
+		NDS_Panel_SetAutomap(automap_active);
+		if (!automap_active)
 			NDS_Panel_ForceGameplayRedraw();
 		else
 		{
-			// Release any gameplay keys that were held when the menu
-			// opened so the player stops moving/firing while choosing.
+			// Release any gameplay keys that were held when the map
+			// opened so the player stops moving/firing while reading it.
 			event_t ev;
 			for (unsigned int i = 0; i < NUM_KEYMAPS; i++)
 			{
@@ -270,65 +292,10 @@ void I_StartTic(void)
 		}
 	}
 
-	if (weapon_menu_active)
+	if (automap_active)
 	{
-		boolean owned[NDS_NUM_WEAPONS];
-		int current = read_weapon_state(owned);
-
-		// Keep the highlight on a valid owned weapon.
-		if (!owned[weapon_menu_sel])
-			weapon_menu_sel = cycle_weapon_sel(1, owned);
-
-		if (pressed & KEY_UP)
-			weapon_menu_sel = cycle_weapon_sel(-1, owned);
-		if (pressed & KEY_DOWN)
-			weapon_menu_sel = cycle_weapon_sel(1, owned);
-
-		// A confirms the selection and closes the menu.
-		if (pressed & KEY_A)
-		{
-			if (owned[weapon_menu_sel])
-				select_weapon(weapon_menu_sel);
-			weapon_menu_active = false;
-			NDS_Panel_SetWeaponMenu(false);
-			NDS_Panel_ForceGameplayRedraw();
-		}
-
-		// While the menu is open, a tap on a weapon row selects it.
-		// Dragging is ignored (no turning while choosing a weapon).
-		if (held & KEY_TOUCH)
-		{
-			touchPosition touch;
-			touchRead(&touch);
-			if (!touch_active)
-			{
-				touch_down_x = touch.px;
-				touch_down_y = touch.py;
-				touch_dragged = false;
-				touch_last_x = touch.px;
-				touch_active = 1;
-			}
-		}
-		else if (touch_active)
-		{
-			touch_active = 0;
-			if (!touch_dragged)
-			{
-				int row = (touch_down_y * 24) / 256 - 4;
-				if (row >= 0 && row < NDS_NUM_WEAPONS && owned[row])
-				{
-					select_weapon(row);
-					weapon_menu_active = false;
-					NDS_Panel_SetWeaponMenu(false);
-					NDS_Panel_ForceGameplayRedraw();
-				}
-			}
-		}
-
-		NDS_Panel_DrawWeaponMenu(weapon_menu_sel, owned, current);
-
-		// The weapon menu consumes all other input this frame; the
-		// touch-turn handler below is skipped while the menu is open.
+		// The automap consumes all other input this frame; the
+		// touch-turn handler below is skipped while it is open.
 		return;
 	}
 
@@ -368,16 +335,21 @@ void I_StartTic(void)
 		D_PostEvent(&ev);
 	}
 
-	// Y performs a quick "next owned weapon" cycle. Full bidirectional
-	// selection is available through the SELECT weapon menu.
-	if (pressed & KEY_Y)
+	// L / R switch to the previous / next owned weapon. Switching is
+	// edge-triggered: we only act on the initial press, not while the
+	// shoulder button is held, so a single tap = one switch.
+	if ((pressed & (KEY_L | KEY_R)) && !weapon_switch_held)
 	{
 		boolean owned[NDS_NUM_WEAPONS];
 		read_weapon_state(owned);
-		int next = cycle_weapon_sel(1, owned);
-		if (owned[next])
-			select_weapon(next);
+		int dir = (pressed & KEY_R) ? 1 : -1;
+		int slot = next_owned_weapon(dir, owned);
+		if (slot >= 0)
+			select_weapon(slot);
+		weapon_switch_held = true;
 	}
+	if (!(held & (KEY_L | KEY_R)))
+		weapon_switch_held = false;
 
 	// -------------------------------------------------------------------
 	// Touch screen handling
@@ -437,33 +409,9 @@ void I_StartTic(void)
 	{
 		if (touch_active)
 		{
-			// Stylus released: a tap (no drag) toggles/uses the menu.
-			if (!touch_dragged)
-			{
-				if (!weapon_menu_active)
-				{
-					weapon_menu_active = true;
-				}
-				else
-				{
-					// Map the tap's vertical position to a weapon row.
-					// The menu draws weapons starting at console row 5,
-					// and the 256px-tall touch screen maps to 24 rows.
-					int row = (touch_down_y * 24) / 256 - 4;
-					if (row >= 0 && row < NDS_NUM_WEAPONS)
-					{
-						boolean owned[NDS_NUM_WEAPONS];
-						read_weapon_state(owned);
-					if (owned[row])
-					{
-						select_weapon(row);
-						weapon_menu_active = false;
-						NDS_Panel_SetWeaponMenu(false);
-						NDS_Panel_ForceGameplayRedraw();
-					}
-					}
-				}
-			}
+			// Stylus released. A tap (no drag) does nothing special now
+			// that weapon selection is on L/R; dragging is the turn
+			// gesture and is handled above while the stylus is held.
 		}
 		touch_active = 0;
 	}

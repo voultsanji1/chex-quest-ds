@@ -45,5 +45,10 @@ void I_StopTextInput(void);
 void I_HandleKeyboardEvent(SDL_Event *sdlevent);
 void I_HandleMouseEvent(SDL_Event *sdlevent);
 
+// I_ClearInput resets all backend input state (held buttons, touch, pending
+// key releases). Used after a savegame load so a button still held at the
+// moment of load does not leak into gameplay (e.g. firing a shot).
+void I_ClearInput(void);
+
 
 #endif
