@@ -39,7 +39,9 @@ SOURCES_SHARED := \
 	src/net_client.c src/net_common.c src/net_dedicated.c \
 	src/net_io.c src/net_loop.c src/net_packet.c src/net_petname.c \
 	src/net_query.c src/net_server.c src/net_structrw.c \
-	src/aes_prng.c
+	src/aes_prng.c \
+	src/i_oplmusic.c src/midifile.c \
+	src/opl/opl.c src/opl/opl3.c src/opl/opl_queue.c
 
 # SOURCES_DOOM: wildcard for all doom/*.c files. These contain the game
 # logic (renderer, physics, AI, map loading) with zero platform code.
@@ -55,7 +57,7 @@ SOURCES_C	:= $(SOURCES_SHARED) $(SOURCES_DOOM) $(SOURCES_NDS)
 # INCLUDEDIRS: sdl_shim provides SDL.h stubs that replace system SDL
 # headers. When Chocolate Doom code does #include "SDL.h", the compiler
 # finds src/sdl_shim/SDL.h instead of a real SDL installation.
-INCLUDEDIRS	:= src src/doom src/sdl_shim
+INCLUDEDIRS	:= src src/doom src/sdl_shim src/opl src/nds
 GFXDIRS		:=
 BINDIRS		:=
 AUDIODIRS	:=
@@ -76,7 +78,7 @@ DEFINES		:= -D__NDS__
 # touchscreen/WiFi hardware.
 ARM7ELF		:= arm7/build/arm7.elf
 
-LIBS		:= -lmm9 -lnds9
+LIBS		:= -lmm9 -lnds9 -lm
 LIBDIRS		+= $(BLOCKSDS)/libs/maxmod \
 		   $(BLOCKSDS)/libs/libnds
 

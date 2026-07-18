@@ -253,42 +253,15 @@ void I_PrecacheSounds(sfxinfo_t *sounds, int num_sounds)
 	(void)sounds; (void)num_sounds;
 }
 
-// Music stubs: all functions are no-ops.
+// Music: the high-level I_* music API is implemented in i_music_nds.c and
+// forwards to the OPL (Adlib/SB) module, which drives the software OPL3
+// emulator via the opl_nds driver (src/nds/opl_nds.c).
 //
-// Doom's music is stored as MUS/MIDI and played through OPL2 FM synthesis.
-// Software OPL emulation at the native 49716 Hz sample rate requires nearly
-// 100% of the ARM9 CPU, leaving no headroom for the game loop. Music is
-// disabled until an ARM7-side OPL implementation becomes viable.
-void I_InitMusic(void) {}
-void I_ShutdownMusic(void) {}
-void I_SetMusicVolume(int volume) { (void)volume; }
-void I_PauseSong(void) {}
-void I_ResumeSong(void) {}
-
-void *I_RegisterSong(void *data, int len)
-{
-	(void)data; (void)len;
-	return NULL;
-}
-
-void I_UnRegisterSong(void *handle) { (void)handle; }
-void I_PlaySong(void *handle, boolean looping) { (void)handle; (void)looping; }
-void I_StopSong(void) {}
-boolean I_MusicIsPlaying(void) { return false; }
+// I_SetOPLDriverVer and I_OPL_DevMessages are provided by src/i_oplmusic.c,
+// which is compiled into the NDS build specifically to supply OPL music.
 
 void I_BindSoundVariables(void) {}
 void I_InitTimidityConfig(void) {}
-
-// OPL stubs: I_SetOPLDriverVer and I_OPL_DevMessages are called
-// unconditionally by s_sound.c during startup. They must exist even when
-// OPL playback is disabled, or the linker will fail with undefined
-// references.
-void I_SetOPLDriverVer(opl_driver_ver_t ver) { (void)ver; }
-void I_OPL_DevMessages(char *result, size_t result_len)
-{
-	if (result_len > 0)
-		result[0] = '\0';
-}
 
 int NDS_SoundCacheCount(void)
 {
@@ -308,5 +281,4 @@ int NDS_SoundCacheCount(void)
 const sound_module_t sound_sdl_module = { NULL, 0 };
 const sound_module_t sound_pcsound_module = { NULL, 0 };
 const music_module_t music_sdl_module = { NULL, 0 };
-const music_module_t music_opl_module = { NULL, 0 };
 const music_module_t music_pack_module = { NULL, 0 };
