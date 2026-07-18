@@ -66,6 +66,9 @@ extern opl_driver_t opl_win32_driver;
 #endif
 extern opl_driver_t opl_sdl_driver;
 
+// NDS software OPL driver (defined in src/nds/opl_nds.c).
+extern opl_driver_t opl_nds_driver;
+
 // NDS-only helper: advance the software OPL driver's virtual clock so that
 // status-timer emulation stays in sync during synchronous OPL_Delay() calls.
 #ifdef __NDS__
