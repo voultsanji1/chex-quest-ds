@@ -317,7 +317,36 @@ void M_MakeDirectory(const char *path)
 
     free(wdir);
 #else
-    mkdir(path, 0755);
+    // Recursively create the directory and any missing parents. This is
+    // required because the NDS savegame path nests several levels deep
+    // (eg. /doom/savegames/chex.wad/) and a single mkdir() call fails when
+    // intermediate directories do not yet exist, which previously caused
+    // saves to fail with "FAILED TO OPEN ... temp.dsg".
+    char *dup = M_StringDuplicate(path);
+    size_t len = strlen(dup);
+
+    // Strip a single trailing separator so "/doom/" and "/doom" behave the
+    // same when we look for the parent directory.
+    while (len > 1 && dup[len - 1] == DIR_SEPARATOR)
+    {
+        dup[--len] = '\0';
+    }
+
+    for (size_t i = 1; i <= len; i++)
+    {
+        if (i == len || dup[i] == DIR_SEPARATOR)
+        {
+            char saved = dup[i];
+            dup[i] = '\0';
+            if (strlen(dup) > 0)
+            {
+                mkdir(dup, 0755);
+            }
+            dup[i] = saved;
+        }
+    }
+
+    free(dup);
 #endif
 }
 
@@ -515,7 +544,20 @@ char *M_TempFile(const char *s)
 
     if (tempdir == NULL)
     {
-        tempdir = "/tmp";
+        // On the NDS there is no /tmp and the current working directory is
+        // not writable, so fall back to the configuration directory which
+        // is guaranteed to live on the FAT filesystem (eg. /doom/).
+#ifdef __NDS__
+        extern const char *configdir;
+        if (configdir != NULL && configdir[0] != '\0')
+        {
+            tempdir = configdir;
+        }
+        else
+#endif
+        {
+            tempdir = "/tmp";
+        }
     }
 #endif
 

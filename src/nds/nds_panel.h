@@ -54,4 +54,27 @@ void NDS_Panel_FatalError(const char *error);
 // Return the number of sound effects currently cached by the NDS mixer.
 int NDS_SoundCacheCount(void);
 
+// Number of weapon slots the on-screen weapon menu can display. Matches
+// NUMWEAPONS in the Doom engine (fist .. super shotgun).
+#define NDS_NUM_WEAPONS 9
+
+// Draw the in-game weapon selection menu on the bottom screen.
+//   selected -- currently highlighted weapon slot (0 .. NDS_NUM_WEAPONS-1)
+//   owned    -- boolean per slot: whether the player possesses that weapon
+//   current -- weapon slot currently equipped (for the marker)
+// Returns immediately if the console is not in gameplay mode yet.
+void NDS_Panel_DrawWeaponMenu(int selected, const boolean owned[NDS_NUM_WEAPONS],
+                              int current);
+
+// True once the gameplay HUD has taken over the bottom screen, i.e. it is
+// safe to draw the weapon menu over it.
+boolean NDS_Panel_GameplayActive(void);
+
+// Notify the panel that the weapon menu is (de)activated so the periodic
+// gameplay HUD refresh does not overwrite it.
+void NDS_Panel_SetWeaponMenu(boolean active);
+
+// Force the gameplay HUD to redraw on the next frame.
+void NDS_Panel_ForceGameplayRedraw(void);
+
 #endif

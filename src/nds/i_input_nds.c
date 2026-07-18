@@ -20,6 +20,7 @@
 // ==========================================================================
 
 #include <nds.h>
+#include <stdlib.h>
 
 #include "config.h"
 #include "doomtype.h"
@@ -27,6 +28,10 @@
 #include "d_event.h"
 #include "SDL.h"
 #include "i_video.h"
+#include "nds_panel.h"
+#include "doomstat.h"
+#include "doomdef.h"
+#include "d_player.h"
 
 // Chocolate Doom uses D_PostEvent for the event queue
 void D_PostEvent(event_t *ev);
@@ -67,10 +72,12 @@ int joystick_turn_sensitivity = 0;
 //     the player's speed. X is above B on the NDS face buttons, easy
 //     to hold with the thumb while pressing the D-pad.
 //
-//   Y -> '1' (select weapon 1, fist/chainsaw)
+//   Y -> quick weapon cycle (next owned weapon)
 //     Doom uses number keys 1-9 for weapon selection. With limited
-//     buttons, Y cycles to weapon slot 1. A more complete weapon
-//     switch would need a wheel menu, but slot 1 is the minimal case.
+//     buttons there is no room for nine direct bindings, so Y advances
+//     to the next owned weapon. For full bidirectional selection the
+//     player opens the bottom-screen weapon menu with SELECT and taps
+//     (or navigates with D-pad + A) the desired weapon.
 //
 //   L -> ',' (strafe left)
 //   R -> '.' (strafe right)
@@ -81,9 +88,10 @@ int joystick_turn_sensitivity = 0;
 //   START -> KEY_ESCAPE (open/close menu)
 //     Standard console convention: START opens the pause/options menu.
 //
-//   SELECT -> KEY_TAB (toggle automap)
-//     TAB opens Doom's automap overlay. SELECT is the natural choice
-//     for a secondary system function.
+//   SELECT -> open/close the bottom-screen weapon menu
+//     SELECT toggles an on-screen weapon list drawn on the touch screen.
+//     This replaces the old TAB-automap binding; weapon switching is the
+//     most common action that needed more than a single button.
 // -----------------------------------------------------------------------
 typedef struct
 {
@@ -99,18 +107,85 @@ static const keymap_t keymap[] = {
 	{ KEY_A,      KEY_RCTRL },     // Fire
 	{ KEY_B,      ' ' },           // Use/Open (space)
 	{ KEY_X,      KEY_RSHIFT },    // Run
-	{ KEY_Y,      '1' },           // Weapon 1
 	{ KEY_L,      ',' },           // Strafe left
 	{ KEY_R,      '.' },           // Strafe right
 	{ KEY_START,  KEY_ESCAPE },    // Menu
-	{ KEY_SELECT, KEY_TAB },       // Automap
 };
 
 #define NUM_KEYMAPS (sizeof(keymap) / sizeof(keymap[0]))
 
-// Previous frame's button bitmask. Used to compute press/release deltas.
-// On each tic, we XOR current vs previous to find state changes.
-static int prev_buttons = 0;
+	// Previous frame's button bitmask. Used to compute press/release deltas.
+	// On each tic, we XOR current vs previous to find state changes.
+	static int prev_buttons = 0;
+
+	// Touch-screen gesture tracking, shared between the gameplay and
+	// weapon-menu input paths so a tap can both open and select from the
+	// menu.
+	static int touch_active = 0;
+	static int touch_last_x = 0;
+	static int touch_down_x = 0;
+	static int touch_down_y = 0;
+	static boolean touch_dragged = false;
+
+// Weapon menu state. When active, the bottom screen shows the list of
+// weapons and game input (movement, fire, etc.) is suspended so the
+// D-pad/A can drive menu navigation instead.
+static boolean weapon_menu_active = false;
+static int weapon_menu_sel = 0;
+
+// Build the owned-weapon mask and current weapon slot from the live
+// player structure. Returns the current weapon slot (or -1 before play).
+static int read_weapon_state(boolean owned[NDS_NUM_WEAPONS])
+{
+	for (int i = 0; i < NDS_NUM_WEAPONS; i++)
+		owned[i] = false;
+
+	if (gamestate != GS_LEVEL || !playeringame[consoleplayer])
+		return -1;
+
+	for (int i = 0; i < NUMWEAPONS && i < NDS_NUM_WEAPONS; i++)
+		owned[i] = players[consoleplayer].weaponowned[i] != 0;
+
+	int cur = (int)players[consoleplayer].readyweapon;
+	if (cur < 0 || cur >= NDS_NUM_WEAPONS)
+		cur = 0;
+	return cur;
+}
+
+// Post a weapon-selection event. The engine maps digit keys '1'..'9' to
+// weapon slots 0..8 (see weapon_keys[] in g_game.c), so sending the
+// matching digit selects that weapon during the next ticcmd build.
+static void select_weapon(int slot)
+{
+	event_t ev;
+	ev.type = ev_keydown;
+	ev.data1 = '1' + slot;
+	ev.data2 = ev.data3 = 0;
+	D_PostEvent(&ev);
+	ev.type = ev_keyup;
+	D_PostEvent(&ev);
+}
+
+// Advance weapon_menu_sel to the next owned weapon (direction +1/-1),
+// skipping slots the player does not have. Returns the new selection.
+static int cycle_weapon_sel(int direction, const boolean owned[NDS_NUM_WEAPONS])
+{
+	int count = 0;
+	for (int i = 0; i < NDS_NUM_WEAPONS; i++)
+		if (owned[i])
+			count++;
+	if (count == 0)
+		return weapon_menu_sel;
+
+	for (int step = 1; step <= NDS_NUM_WEAPONS; step++)
+	{
+		int next = (weapon_menu_sel + direction * step + NDS_NUM_WEAPONS * step)
+		           % NDS_NUM_WEAPONS;
+		if (owned[next])
+			return next;
+	}
+	return weapon_menu_sel;
+}
 
 // -----------------------------------------------------------------------
 // I_StartTic -- Called once per game tic by the Doom main loop.
@@ -137,6 +212,102 @@ void I_StartTic(void)
 	prev_buttons = held;
 
 	event_t ev;
+
+	// SELECT toggles the bottom-screen weapon menu. While the menu is
+	// open we handle navigation locally and suppress normal gameplay
+	// button mapping so the D-pad drives the menu instead of movement.
+	if (pressed & KEY_SELECT)
+	{
+		weapon_menu_active = !weapon_menu_active;
+		NDS_Panel_SetWeaponMenu(weapon_menu_active);
+		if (!weapon_menu_active)
+			NDS_Panel_ForceGameplayRedraw();
+		else
+		{
+			// Release any gameplay keys that were held when the menu
+			// opened so the player stops moving/firing while choosing.
+			event_t ev;
+			for (unsigned int i = 0; i < NUM_KEYMAPS; i++)
+			{
+				if (held & keymap[i].nds_key)
+				{
+					ev.type = ev_keyup;
+					ev.data1 = keymap[i].doom_key;
+					ev.data2 = ev.data3 = 0;
+					D_PostEvent(&ev);
+				}
+			}
+			if (held & KEY_A)
+			{
+				ev.type = ev_keyup;
+				ev.data1 = KEY_ENTER;
+				ev.data2 = ev.data3 = 0;
+				D_PostEvent(&ev);
+			}
+		}
+	}
+
+	if (weapon_menu_active)
+	{
+		boolean owned[NDS_NUM_WEAPONS];
+		int current = read_weapon_state(owned);
+
+		// Keep the highlight on a valid owned weapon.
+		if (!owned[weapon_menu_sel])
+			weapon_menu_sel = cycle_weapon_sel(1, owned);
+
+		if (pressed & KEY_UP)
+			weapon_menu_sel = cycle_weapon_sel(-1, owned);
+		if (pressed & KEY_DOWN)
+			weapon_menu_sel = cycle_weapon_sel(1, owned);
+
+		// A confirms the selection and closes the menu.
+		if (pressed & KEY_A)
+		{
+			if (owned[weapon_menu_sel])
+				select_weapon(weapon_menu_sel);
+			weapon_menu_active = false;
+			NDS_Panel_SetWeaponMenu(false);
+			NDS_Panel_ForceGameplayRedraw();
+		}
+
+		// While the menu is open, a tap on a weapon row selects it.
+		// Dragging is ignored (no turning while choosing a weapon).
+		if (held & KEY_TOUCH)
+		{
+			touchPosition touch;
+			touchRead(&touch);
+			if (!touch_active)
+			{
+				touch_down_x = touch.px;
+				touch_down_y = touch.py;
+				touch_dragged = false;
+				touch_last_x = touch.px;
+				touch_active = 1;
+			}
+		}
+		else if (touch_active)
+		{
+			touch_active = 0;
+			if (!touch_dragged)
+			{
+				int row = (touch_down_y * 24) / 256 - 4;
+				if (row >= 0 && row < NDS_NUM_WEAPONS && owned[row])
+				{
+					select_weapon(row);
+					weapon_menu_active = false;
+					NDS_Panel_SetWeaponMenu(false);
+					NDS_Panel_ForceGameplayRedraw();
+				}
+			}
+		}
+
+		NDS_Panel_DrawWeaponMenu(weapon_menu_sel, owned, current);
+
+		// The weapon menu consumes all other input this frame; the
+		// touch-turn handler below is skipped while the menu is open.
+		return;
+	}
 
 	for (unsigned int i = 0; i < NUM_KEYMAPS; i++)
 	{
@@ -174,43 +345,60 @@ void I_StartTic(void)
 		D_PostEvent(&ev);
 	}
 
+	// Y performs a quick "next owned weapon" cycle. Full bidirectional
+	// selection is available through the SELECT weapon menu.
+	if (pressed & KEY_Y)
+	{
+		boolean owned[NDS_NUM_WEAPONS];
+		read_weapon_state(owned);
+		int next = cycle_weapon_sel(1, owned);
+		if (owned[next])
+			select_weapon(next);
+	}
+
 	// -------------------------------------------------------------------
-	// Touch screen as mouse input for horizontal turning
+	// Touch screen handling
 	//
-	// State machine with two variables:
-	//   touch_active -- whether the stylus was down on the previous frame
-	//   touch_last_x -- the X pixel coordinate from the previous frame
+	// Two distinct gestures are recognised on the bottom (touch) screen:
 	//
-	// Behavior:
-	//   1. First frame of a new touch: record position, set touch_active.
-	//      No mouse event is posted because there is no previous position
-	//      to compute a delta from. This prevents a spurious large delta
-	//      when the player first taps the screen (the jump from "no touch"
-	//      to an arbitrary X coordinate would cause a sudden spin).
+	//   * Drag  -- the stylus moves while held. The horizontal pixel
+	//     delta is posted as a mouse event so the player can turn left
+	//     and right. This is the primary look control.
 	//
-	//   2. Subsequent frames while dragging: compute pixel delta from the
-	//      previous frame's position. Multiply by 8 to scale into Doom's
-	//      mouse sensitivity range. Doom's internal mouse handling expects
-	//      values in the hundreds for a noticeable turn; raw pixel deltas
-	//      on the 256-pixel-wide NDS touch screen are too small without
-	//      this scaling factor.
+	//   * Tap   -- the stylus is pressed and released with negligible
+	//     movement. A tap opens the weapon menu (mirroring SELECT) so
+	//     weapons can be chosen directly by touching the desired entry.
+	//     If the menu is already open, a tap selects the weapon whose
+	//     row was touched.
 	//
-	//   3. Stylus lifted: reset touch_active. Next touch starts fresh
-	//      from step 1.
-	//
-	// Only horizontal (X axis) movement is used. ev_mouse data2 is the
-	// horizontal delta (turning), data3 would be vertical (look up/down)
-	// but vanilla Doom has no vertical mouselook.
+	// Only horizontal (X axis) movement is used for turning because
+	// vanilla Doom has no vertical mouselook.
 	// -------------------------------------------------------------------
-	static int touch_active = 0;
-	static int touch_last_x = 0;
+
 	if (held & KEY_TOUCH)
 	{
 		touchPosition touch;
 		touchRead(&touch);
-		if (touch_active)
+
+		if (!touch_active)
+		{
+			// New touch begins: record the start point and reset the
+			// drag flag. No mouse event yet (no previous position).
+			touch_down_x = touch.px;
+			touch_down_y = touch.py;
+			touch_dragged = false;
+			touch_last_x = touch.px;
+			touch_active = 1;
+		}
+		else
 		{
 			int dx = touch.px - touch_last_x;
+			int dy = touch.py - touch_down_y;
+
+			// Treat movement beyond a few pixels as a drag (turn).
+			if (abs(dx) > 2 || abs(dy) > 2)
+				touch_dragged = true;
+
 			if (dx != 0)
 			{
 				ev.type = ev_mouse;
@@ -221,10 +409,39 @@ void I_StartTic(void)
 			}
 		}
 		touch_last_x = touch.px;
-		touch_active = 1;
 	}
 	else
 	{
+		if (touch_active)
+		{
+			// Stylus released: a tap (no drag) toggles/uses the menu.
+			if (!touch_dragged)
+			{
+				if (!weapon_menu_active)
+				{
+					weapon_menu_active = true;
+				}
+				else
+				{
+					// Map the tap's vertical position to a weapon row.
+					// The menu draws weapons starting at console row 5,
+					// and the 256px-tall touch screen maps to 24 rows.
+					int row = (touch_down_y * 24) / 256 - 4;
+					if (row >= 0 && row < NDS_NUM_WEAPONS)
+					{
+						boolean owned[NDS_NUM_WEAPONS];
+						read_weapon_state(owned);
+					if (owned[row])
+					{
+						select_weapon(row);
+						weapon_menu_active = false;
+						NDS_Panel_SetWeaponMenu(false);
+						NDS_Panel_ForceGameplayRedraw();
+					}
+					}
+				}
+			}
+		}
 		touch_active = 0;
 	}
 }

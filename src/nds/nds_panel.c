@@ -95,6 +95,7 @@ static char panel_wadname[20];
 static char panel_mapname[12];
 static int boot_row = 5;
 static boolean gameplay_initialized = false;
+static boolean weapon_menu_shown = false;
 
 // FPS tracking.
 // Sampled once every 60 frames using integer math: fps = df * 1000 / dt.
@@ -227,6 +228,11 @@ void NDS_Panel_DrawGameplay(void)
 {
 	frame_count++;
 
+	// While the weapon menu is shown on the bottom screen it redraws
+	// itself every frame; the periodic HUD refresh must not clear it.
+	if (weapon_menu_shown)
+		return;
+
 	if (frame_count % 60 != 0)
 		return;
 
@@ -299,6 +305,80 @@ void NDS_Panel_DrawGameplay(void)
 		at(r);
 		printf("                              ");
 	}
+}
+
+// ---------------------------------------------------------
+// Weapon menu (bottom screen)
+// ---------------------------------------------------------
+
+// Human-readable names for each weapon slot, in engine order
+// (wp_fist .. wp_supershotgun). Used by the touch weapon menu.
+static const char *weapon_names[NDS_NUM_WEAPONS] = {
+    "1 Fist/Zorch",
+    "2 Pistol",
+    "3 Shotgun",
+    "4 Chaingun",
+    "5 Missile",
+    "6 Plasma",
+    "7 BFG",
+    "8 Chainsaw",
+    "9 Super Shotgun",
+};
+
+boolean NDS_Panel_GameplayActive(void)
+{
+    return gameplay_initialized;
+}
+
+void NDS_Panel_SetWeaponMenu(boolean active)
+{
+    weapon_menu_shown = active;
+}
+
+// Force the next gameplay HUD refresh to happen immediately (used when the
+// weapon menu closes so stale menu text is cleared without a one-second lag).
+void NDS_Panel_ForceGameplayRedraw(void)
+{
+    frame_count = 0;
+}
+
+void NDS_Panel_DrawWeaponMenu(int selected, const boolean owned[NDS_NUM_WEAPONS],
+                              int current)
+{
+    if (!gameplay_initialized)
+        return;
+
+    printf("\x1b[2J");
+
+    at(1);  printf(CD HLINE C0);
+    at(2);  printf(CW "WEAPONS" C0);
+    at(3);  printf(CD HLINE C0);
+
+    for (int i = 0; i < NDS_NUM_WEAPONS; i++)
+    {
+        at(5 + i);
+
+        if (i == selected)
+            printf(CG "> " C0);
+        else
+            printf(CD "  " C0);
+
+        if (owned[i])
+        {
+            if (i == current)
+                printf(CW "%-28.28s" C0, weapon_names[i]);
+            else
+                printf(CC "%-28.28s" C0, weapon_names[i]);
+        }
+        else
+        {
+            printf(CD "%-28.28s" C0, weapon_names[i]);
+        }
+    }
+
+    at(15); printf(CD SLINE C0);
+    at(16); printf(CD "D-PAD:move  " CC "A" CD ":select" C0);
+    at(17); printf(CD "or tap a weapon.  " CC "SELECT" CD ":close" C0);
 }
 
 // ---------------------------------------------------------
