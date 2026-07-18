@@ -23,6 +23,7 @@
 #include "config.h"
 #include "doomtype.h"
 #include "i_sound.h"
+#include "i_timer.h"
 #include "opl.h"
 #include "opl_internal.h"
 #include "opl_queue.h"
@@ -58,9 +59,15 @@ static uint64_t slice_duration_us = 0;
 // the mixer while the next is being filled.
 #define OPL_NDS_SLICE_SAMPLES 256
 
-// Mono 8-bit buffer handed to soundPlaySample.
+// Signed 8-bit mono buffer handed to soundPlaySample (the NDS hardware
+// mixer expects signed samples, as the working SFX path shows).
 static uint8_t opl_nds_buf[2][OPL_NDS_SLICE_SAMPLES];
 static int opl_nds_active = 0;
+
+// Estimated time (ms) at which the currently-playing buffer finishes.
+// soundPlaySample is non-blocking and offers no "is playing" query, so we
+// reuse the same duration estimate the SFX path uses.
+static int opl_nds_buffer_end_time = 0;
 
 // Scratch stereo buffer from the emulator (int16, 2 channels).
 static int16_t opl_nds_stereo[OPL_NDS_SLICE_SAMPLES * 2];
@@ -270,23 +277,31 @@ static void ONDS_GenerateAndPlay(void)
     {
         OPL3_GenerateStream(&chip, stereo, OPL_NDS_SLICE_SAMPLES);
 
-        // Downmix stereo -> mono 8-bit (center 0x80).
+        // Downmix stereo -> signed 8-bit mono. The NDS hardware mixer
+        // expects signed samples (center 0), like the working SFX path
+        // which uses XOR 0x80. Using unsigned (+0x80) made it grate.
         for (i = 0; i < OPL_NDS_SLICE_SAMPLES; ++i)
         {
             int32_t s = stereo[i * 2] + stereo[i * 2 + 1];
             s >>= 1; // average
             if (s > 127) s = 127;
             if (s < -128) s = -128;
-            out[i] = (uint8_t)(s + 0x80);
+            out[i] = (uint8_t)(s ^ 0x80);
         }
     }
 
     DC_FlushRange(out, OPL_NDS_SLICE_SAMPLES);
 
-    // Submit to the ARM7 mixer. soundPlaySample is non-blocking; the ARM7
-    // plays the previous buffer while this one is queued.
+    // Submit to the ARM7 mixer. soundPlaySample is non-blocking and offers
+    // no "is playing" query (same limitation as the SFX path), so we record
+    // when this slice is expected to finish and never overwrite a buffer that
+    // is still being played back.
     soundPlaySample(out, SoundFormat_8Bit, OPL_NDS_SLICE_SAMPLES,
                     snd_samplerate, 127, 64, false, 0);
+
+    if (snd_samplerate > 0)
+        opl_nds_buffer_end_time = I_GetTimeMS() +
+            (OPL_NDS_SLICE_SAMPLES * 1000 / snd_samplerate);
 }
 
 // Timer IRQ: advance time, run callbacks, generate a slice.
@@ -295,9 +310,15 @@ static void ONDS_TimerHandler(void)
     current_time_us += slice_duration_us;
 
     ONDS_PumpCallbacks();
-    ONDS_GenerateAndPlay();
 
-    opl_nds_active ^= 1;
+    // Don't overwrite the buffer the ARM7 is still playing. If a slice is
+    // still in flight, skip this tick; the previous buffer keeps looping
+    // silently until we can safely submit the next one.
+    if (I_GetTimeMS() >= opl_nds_buffer_end_time)
+    {
+        ONDS_GenerateAndPlay();
+        opl_nds_active ^= 1;
+    }
 }
 
 // ---------------------------------------------------------------------------
