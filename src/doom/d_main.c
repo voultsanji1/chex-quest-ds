@@ -1443,7 +1443,11 @@ void D_DoomMain (void)
 #endif
     {
 #ifdef __NDS__
-        M_SetConfigDir("/doom/");
+        // On the NDS/DSi the config/save directory is determined at runtime
+        // from the FAT working directory (e.g. "sd:/doom/") rather than a
+        // hardcoded path. i_main_nds.c already calls M_SetConfigDir() with
+        // the correct value before D_DoomMain() runs, so we must leave it
+        // untouched here and call nothing.
 #else
         // Auto-detect the configuration dir.
 

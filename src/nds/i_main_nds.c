@@ -25,8 +25,16 @@
 #include "nds_panel.h"
 
 void D_DoomMain(void);
+void M_SetConfigDir(const char *dir);
 
-#define DOOM_DIR "/doom/"
+// Base directory where WADs and savegames live. On the DS/DSi this is not
+// a fixed "/doom/" path: the FAT filesystem root is "sd:/" on DSi (and
+// "fat:/" on slot-1 flashcards), and the homebrew launcher runs from the
+// folder containing the .nds file. fatGetDefaultCwd() returns that folder
+// (e.g. "sd:/doom/"), which is where the user places their WADs and where
+// we must write savegames. We fall back to "/doom/" only if it is unset.
+static char g_doom_dir[NDS_WAD_PATH_LEN] = "/doom/";
+#define DOOM_DIR g_doom_dir
 
 static const char *known_iwads[] = {
 	"doom2.wad", "plutonia.wad", "tnt.wad", "doom.wad", "doom1.wad",
@@ -47,30 +55,83 @@ static boolean is_known_iwad(const char *name)
 	return false;
 }
 
-// Scan the /doom/ directory for regular files whose names match a known
-// IWAD. Returns the number of WADs found (up to max). Each match is
-// stored as a full path, e.g. "/doom/doom2.wad".
-static int find_wads(char found[][NDS_WAD_PATH_LEN], int max)
+// Scan a directory for regular files whose names match a known IWAD.
+// Returns the number of WADs found (up to max). Each match is stored as a
+// full path, e.g. "sd:/doom/chex.wad".
+static int scan_dir_for_wads(const char *dir, char found[][NDS_WAD_PATH_LEN], int max)
 {
-	DIR *dir = opendir(DOOM_DIR);
-	if (dir == NULL)
+	DIR *d = opendir(dir);
+	if (d == NULL)
 		return 0;
 
 	int count = 0;
 	struct dirent *entry;
 
-	while ((entry = readdir(dir)) != NULL && count < max)
+	while ((entry = readdir(d)) != NULL && count < max)
 	{
 		if (entry->d_type == DT_REG && is_known_iwad(entry->d_name)
-		    && strlen(DOOM_DIR) + strlen(entry->d_name) < NDS_WAD_PATH_LEN)
+		    && strlen(dir) + strlen(entry->d_name) < NDS_WAD_PATH_LEN)
 		{
-			snprintf(found[count], NDS_WAD_PATH_LEN, "%s%s", DOOM_DIR, entry->d_name);
+			snprintf(found[count], NDS_WAD_PATH_LEN, "%s%s", dir, entry->d_name);
 			count++;
 		}
 	}
 
-	closedir(dir);
+	closedir(d);
 	return count;
+}
+
+// Determine where the IWADs live and set DOOM_DIR accordingly. The homebrew
+// may be launched from the folder holding the WADs (cwd) or from a parent
+// with a "doom/" subfolder. We prefer whichever actually contains WADs.
+static void nds_detect_doom_dir(void)
+{
+	char cwd[NDS_WAD_PATH_LEN];
+	char *def = fatGetDefaultCwd();
+	if (def != NULL)
+	{
+		strncpy(cwd, def, NDS_WAD_PATH_LEN - 1);
+		cwd[NDS_WAD_PATH_LEN - 1] = '\0';
+		free(def);
+	}
+	else
+	{
+		strncpy(cwd, "/", NDS_WAD_PATH_LEN - 1);
+		cwd[NDS_WAD_PATH_LEN - 1] = '\0';
+	}
+
+	if (cwd[strlen(cwd) - 1] != '/')
+		strncat(cwd, "/", NDS_WAD_PATH_LEN - 1 - strlen(cwd));
+
+	char probe[NDS_WAD_PATH_LEN];
+	char found[16][NDS_WAD_PATH_LEN];
+
+	// Case 1: WADs sit directly in the launch folder.
+	if (scan_dir_for_wads(cwd, found, 16) > 0)
+	{
+		strncpy(g_doom_dir, cwd, NDS_WAD_PATH_LEN - 1);
+		g_doom_dir[NDS_WAD_PATH_LEN - 1] = '\0';
+		return;
+	}
+
+	// Case 2: WADs sit in a "doom/" subfolder of the launch folder.
+	snprintf(probe, NDS_WAD_PATH_LEN, "%sdoom/", cwd);
+	if (scan_dir_for_wads(probe, found, 16) > 0)
+	{
+		strncpy(g_doom_dir, probe, NDS_WAD_PATH_LEN - 1);
+		g_doom_dir[NDS_WAD_PATH_LEN - 1] = '\0';
+		return;
+	}
+
+	// Fallback: assume the "doom/" subfolder even if empty.
+	strncpy(g_doom_dir, probe, NDS_WAD_PATH_LEN - 1);
+	g_doom_dir[NDS_WAD_PATH_LEN - 1] = '\0';
+}
+
+// Scan DOOM_DIR for regular files whose names match a known IWAD.
+static int find_wads(char found[][NDS_WAD_PATH_LEN], int max)
+{
+	return scan_dir_for_wads(DOOM_DIR, found, max);
 }
 
 static int wad_menu(char wads[][NDS_WAD_PATH_LEN], int count)
@@ -167,6 +228,14 @@ int main(void)
 	// filesystem, so config and save writes land somewhere writable.
 	// NitroFS is read-only and is reached only via explicit "nitro:/..."
 	// paths, so there is nothing else to mount here.
+
+	// Work out where the WADs and savegames actually live. On the DSi the
+	// FAT root is "sd:/" (not "/"), and the launcher runs from the folder
+	// holding the .nds file, so a hardcoded "/doom/" path would not exist
+	// and saving would crash with FATAL ERROR. We derive the path from the
+	// filesystem's current working directory instead.
+	nds_detect_doom_dir();
+	M_SetConfigDir(DOOM_DIR);
 
 	// Decide which IWAD to load. Prefer the embedded copy so the ROM is
 	// playable on its own; otherwise scan /doom/ on the SD card.

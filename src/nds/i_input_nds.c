@@ -155,6 +155,14 @@ static int read_weapon_state(boolean owned[NDS_NUM_WEAPONS])
 // Post a weapon-selection event. The engine maps digit keys '1'..'9' to
 // weapon slots 0..8 (see weapon_keys[] in g_game.c), so sending the
 // matching digit selects that weapon during the next ticcmd build.
+//
+// IMPORTANT: the keyup must NOT be posted in the same tic as the keydown.
+// G_BuildTicCmd() reads gamekeydown[key] to decide the weapon; if we post
+// keydown then keyup immediately, gamekeydown is cleared again before the
+// ticcmd is built and the weapon never changes. So we post the keydown now
+// and remember to release the key on the following I_StartTic.
+static int pending_weapon_keyup = -1;
+
 static void select_weapon(int slot)
 {
 	event_t ev;
@@ -162,8 +170,19 @@ static void select_weapon(int slot)
 	ev.data1 = '1' + slot;
 	ev.data2 = ev.data3 = 0;
 	D_PostEvent(&ev);
+	pending_weapon_keyup = '1' + slot;
+}
+
+static void release_pending_weapon_key(void)
+{
+	if (pending_weapon_keyup < 0)
+		return;
+	event_t ev;
 	ev.type = ev_keyup;
+	ev.data1 = pending_weapon_keyup;
+	ev.data2 = ev.data3 = 0;
 	D_PostEvent(&ev);
+	pending_weapon_keyup = -1;
 }
 
 // Advance weapon_menu_sel to the next owned weapon (direction +1/-1),
@@ -205,6 +224,10 @@ static int cycle_weapon_sel(int direction, const boolean owned[NDS_NUM_WEAPONS])
 // -----------------------------------------------------------------------
 void I_StartTic(void)
 {
+	// Release any weapon digit key we posted on the previous tic so the
+	// keydown is seen by exactly one ticcmd build (see select_weapon).
+	release_pending_weapon_key();
+
 	scanKeys();
 	int held = keysHeld();
 	int pressed = held & ~prev_buttons;
