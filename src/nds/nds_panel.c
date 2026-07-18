@@ -93,7 +93,6 @@ static const char *wad_description(const char *filename)
 // State
 static char panel_wadname[20];
 static char panel_mapname[12];
-static boolean panel_automap_active = false;
 static int boot_row = 5;
 static boolean gameplay_initialized = false;
 
@@ -224,11 +223,6 @@ void NDS_Panel_SetMap(const char *mapname)
 	panel_mapname[sizeof(panel_mapname) - 1] = '\0';
 }
 
-void NDS_Panel_SetAutomap(boolean active)
-{
-	panel_automap_active = active;
-}
-
 void NDS_Panel_DrawGameplay(void)
 {
 	frame_count++;
@@ -278,8 +272,7 @@ void NDS_Panel_DrawGameplay(void)
 	// Status (rows 7-9)
 	at(7);  printf(CC "STATUS" C0);
 	at(8);  printf(CC "FPS " CW "%-3d " CC "Frame " CW "%-9d" C0, fps_current, frame_count);
-	at(9);  printf(CC "Time " CW "%d:%02d " CC "%s" C0, mm, ss,
-	             panel_automap_active ? CY "AUTOMAP" C0 : "       ");
+	at(9);  printf(CC "Time " CW "%d:%02d                     " C0, mm, ss);
 
 	// Separator (row 10)
 	at(10); printf(CD SLINE C0);
