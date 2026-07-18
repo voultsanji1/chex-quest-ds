@@ -18,14 +18,14 @@ extern const music_module_t music_opl_module;
 
 void I_InitMusic(void)
 {
-    if (music_opl_module.InitMusic != NULL)
-        music_opl_module.InitMusic();
+    if (music_opl_module.Init != NULL)
+        music_opl_module.Init();
 }
 
 void I_ShutdownMusic(void)
 {
-    if (music_opl_module.ShutdownMusic != NULL)
-        music_opl_module.ShutdownMusic();
+    if (music_opl_module.Shutdown != NULL)
+        music_opl_module.Shutdown();
 }
 
 void I_SetMusicVolume(int volume)
@@ -36,14 +36,14 @@ void I_SetMusicVolume(int volume)
 
 void I_PauseSong(void)
 {
-    if (music_opl_module.PauseSong != NULL)
-        music_opl_module.PauseSong();
+    if (music_opl_module.PauseMusic != NULL)
+        music_opl_module.PauseMusic();
 }
 
 void I_ResumeSong(void)
 {
-    if (music_opl_module.ResumeSong != NULL)
-        music_opl_module.ResumeSong();
+    if (music_opl_module.ResumeMusic != NULL)
+        music_opl_module.ResumeMusic();
 }
 
 void *I_RegisterSong(void *data, int len)
