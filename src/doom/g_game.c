@@ -969,7 +969,7 @@ void G_Ticker (void)
 	    break; 
 	} 
     }
-
+    
     // get commands, check consistancy,
     // and build new consistancy check
     buf = (gametic/ticdup)%BACKUPTICS; 
@@ -1679,11 +1679,6 @@ void G_DoLoadGame (void)
 
     fclose(save_stream);
     
-    // Drop any input that was held while the load completed (e.g. the A
-    // button used to confirm the load) so it does not leak into gameplay
-    // and fire a spurious shot on the freshly loaded level.
-    I_ClearInput();
-
     if (setsizeneeded)
 	R_ExecuteSetViewSize ();
     
