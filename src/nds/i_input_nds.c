@@ -182,17 +182,22 @@ static void release_pending_weapon_key(void)
 	pending_weapon_keyup = -1;
 }
 
-// Reset all NDS input state. Called after a savegame is loaded so that a
-// button still held at the moment of load (e.g. A used to confirm the
-// load) does not leak into gameplay and fire a spurious shot. Also clears
-// any pending weapon keyup so a deferred digit release is not lost.
+// Resynchronise the backend input after a savegame load. The Doom-side
+// key state (gamekeydown[]) is already cleared by G_DoLoadGame, but our
+// hardware tracking (prev_buttons) must be synced to the real buttons so
+// that a button still physically held at load time (e.g. A used to confirm
+// the load) does NOT register as a fresh press on the next tic and fire a
+// spurious shot. We sync to the live hardware state and clear transient
+// tracking; we deliberately do NOT zero prev_buttons, because that would
+// make a held button never produce a keyup and leave the player "stuck"
+// moving on their own.
 void I_ClearInput(void)
 {
-	prev_buttons = 0;
+	prev_buttons = keysHeld();
+	pending_weapon_keyup = -1;
+	weapon_switch_held = false;
 	touch_active = 0;
 	touch_dragged = false;
-	weapon_switch_held = false;
-	pending_weapon_keyup = -1;
 }
 
 // Find the next/previous owned weapon relative to the current ready weapon.
