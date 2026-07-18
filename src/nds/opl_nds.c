@@ -22,10 +22,13 @@
 
 #include "config.h"
 #include "doomtype.h"
+#include "i_sound.h"
 #include "opl.h"
 #include "opl_internal.h"
 #include "opl_queue.h"
 #include "opl3.h"
+
+static void ONDS_WriteRegister(uint16_t reg, uint8_t value);
 
 // ---------------------------------------------------------------------------
 // Emulator state
@@ -104,7 +107,6 @@ static void ONDS_WritePort(opl_port_t port, unsigned int value)
 static void ONDS_WriteRegister(uint16_t reg, uint8_t value)
 {
     int tics;
-    opl_nds_timer_t *timer;
 
     switch (reg & 0xff)
     {
