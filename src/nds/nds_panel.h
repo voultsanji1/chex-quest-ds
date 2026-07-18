@@ -45,6 +45,11 @@ void NDS_Panel_SetWAD(const char *wadname);
 // Store the current map lump name (e.g. "E1M1", "MAP01") for the HUD.
 void NDS_Panel_SetMap(const char *mapname);
 
+// Record whether the original Doom automap (toggled by SELECT) is active,
+// so the gameplay HUD can reflect it. Does not draw; call
+// NDS_Panel_ForceGameplayRedraw() afterwards to refresh the panel.
+void NDS_Panel_SetAutomap(boolean active);
+
 // Redraw the gameplay HUD. Called every frame, but only refreshes every 60th.
 void NDS_Panel_DrawGameplay(void);
 
