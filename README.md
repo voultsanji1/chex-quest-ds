@@ -70,13 +70,24 @@ docker run --rm -v "$PWD":/work -w /work skylyrac/blocksds:slim-latest \
 
 ## Controls
 
+Button names follow the standard Nintendo DS layout (D-pad ↑ ↓ ← →,
+A, B, X, Y, L, R, START, SELECT — see
+[StrategyWiki](https://strategywiki.org/wiki/Category:Nintendo_DS_controller_buttons)).
+
 | Action | Button |
 | --- | --- |
-| Move | D-pad |
-| Use / Fire | A / B |
-| Menu / Pause | START / SELECT |
-| Map / Automap | L / R or X / Y (depends on menu) |
-| Weapon cycle | L / R |
+| Move / Turn | D-pad ↑ ↓ ← → |
+| Fire | **A** |
+| Use / Open (doors, switches) | **B** |
+| Run (hold) | **X** |
+| Confirm menu / Save / Y–N dialogs | **Y** |
+| Previous / Next owned weapon | **L** / **R** |
+| Menu / Pause | **START** |
+| Automap toggle | **SELECT** |
+
+> **Note:** `A` sends only the fire key. It does **not** send `ENTER`, so
+> firing never re-shows the last on-screen message and never phantom-confirms
+> a menu. Use **Y** to confirm menus, save games, and yes/no prompts.
 
 ## Project structure
 
@@ -119,14 +130,48 @@ in the style of the surrounding Chocolate Doom code):
   WAD selector, and gameplay HUD (FPS, frame count, zone memory, sound cache,
   automap indicator).
 
-### Note on music
+## Known issues and limitations
 
-The original Chex Quest music is OPL/AdLib (FM synthesis) MIDI. A software
-OPL3 emulator was prototyped for this port but **removed**: the Nuked OPL3
-emulator is far too heavy for the DS ARM9 CPU (it consumes nearly 100% of the
-CPU in real time, causing audio glitches and crashes). Music playback is
-therefore disabled; only sound effects play. A proper music implementation
-would require an ARM7-side synthesizer, which is out of scope here.
+This section is kept up to date with the actual state of the code.
+
+### Fixed bugs (history)
+
+- **SELECT froze all input.** A custom parallel automap toggle blocked every
+  subsequent key event. Fixed by mapping `SELECT → KEY_TAB` (Doom's native
+  automap) and mirroring the real `automapactive` state to the HUD, instead of
+  maintaining a second toggle.
+- **"GAME SAVED" / status message repeated on every fire.** `A` used to send
+  both the fire key and `KEY_ENTER`. In Doom, `KEY_ENTER` is the
+  *message-refresh* key, so every shot re-printed the last on-screen message
+  ("Picked up…", "GAME SAVED", …) and could phantom-confirm a menu. Fixed by
+  making `A` fire-only and moving menu/save confirmation to **Y**.
+- **Save-game loop.** The NDS auto-save path left `saveStringEnter` set, so a
+  later `ENTER` re-triggered a save. Fixed by clearing `saveStringEnter` in
+  `M_SaveSelect` and in `M_ClearMenus`.
+
+### Current limitations
+
+- **No music.** OPL/AdLib music is disabled (see above). Only sound effects
+  play. This is a permanent limitation of this build unless an ARM7-side
+  synth is added.
+- **No keyboard / text entry.** The NDS has no keyboard, so save-game slots
+  are auto-named (map name) instead of typed by the player.
+- **No multiplayer / network play.** The DS wireless stack is not used; the
+  netcode is compiled out.
+- **No touch-screen mouse-look aiming beyond what the original engine
+  supports.** The touch screen drives the bottom-screen panel/HUD only.
+- **No save "overwrite confirmation" typing.** Saving to a used slot
+  overwrites it immediately (auto-named), matching the no-keyboard constraint.
+
+### Things that will NOT be added
+
+- **OPL3 music emulation on ARM9** — too slow, causes crashes (already tried
+  and removed).
+- **In-game typed text / chat** — no NDS keyboard; not planned.
+- **Widescreen / high-resolution rendering** — the DS hardware is fixed at
+  256×192 per screen.
+- **DSi/3DS enhancement features** (camera, motion, 3D slider) — out of scope
+  for a vanilla-accurate Chocolate Doom port.
 
 ## Use of AI assistance
 
