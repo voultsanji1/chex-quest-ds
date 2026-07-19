@@ -40,6 +40,18 @@ GitHub automatically creates a release containing the `.nds`.
 - Copy `chexquest.nds` to the SD card and launch it. The game starts
   immediately: it reads `chex.wad`/`chex.deh` straight from the ROM.
 
+### Tested hardware
+
+This build has been **tested and confirmed working on a Nintendo DSi XL
+running [TwilightMenu++](https://wiki.ds-homebrew.com/twilightmenu/)**.
+
+Other setups (DS Lite, original DS, 3DS, emulators such as melonDS or
+DeSmuME, different flashcarts/loaders) may work but are **not verified**.
+If you hit a crash, freeze, or other issue on a device not listed above,
+please [open an issue](https://github.com/voultsanji1/chex-quest-ds/issues)
+with your hardware/loader and a description of the problem so it can be
+investigated.
+
 ### SD card fallback
 
 If for some reason the bundled files are not found (older loaders that do not
