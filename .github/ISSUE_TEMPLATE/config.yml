@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: General question
+    url: https://github.com/voultsanji1/chex-quest-ds/discussions
+    about: Ask a question or discuss the project (if Discussions is enabled).

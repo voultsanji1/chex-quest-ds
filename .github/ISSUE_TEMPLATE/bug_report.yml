@@ -1,0 +1,76 @@
+name: Bug report
+description: Report a crash, freeze, or other problem running Chex Quest DS
+title: "[BUG] "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting! This build is tested on **DSi XL + TwilightMenu++**.
+        If you are on a different device, please still report — it helps us know
+        what needs work.
+  - type: dropdown
+    id: device
+    attributes:
+      label: Device / console
+      description: What Nintendo DS family hardware are you using?
+      options:
+        - DSi XL
+        - DSi
+        - 3DS / 2DS
+        - DS Lite
+        - Original DS (DS Phat)
+        - Emulator (melonDS)
+        - Emulator (DeSmuME)
+        - Other (specify in description)
+    validations:
+      required: true
+  - type: dropdown
+    id: loader
+    attributes:
+      label: Loader / menu
+      description: How are you launching the .nds file?
+      options:
+        - TwilightMenu++
+        - NDS Homebrew Menu
+        - R4 / Acekard (or other Slot-1 flashcart)
+        - Unlaunch
+        - melonDS
+        - DeSmuME
+        - Other (specify in description)
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Build version / release tag
+      description: Which release did you test? (e.g. v1.0.3)
+      placeholder: v1.0.3
+    validations:
+      required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: Describe the bug and what you expected instead.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: What did you do right before the problem showed up?
+      placeholder: |
+        1. Launch chexquest.nds
+        2. Start new game
+        3. Press A near an enemy
+        4. ...
+    validations:
+      required: false
+  - type: textarea
+    id: extra
+    attributes:
+      label: Extra info
+      description: Screenshots, error messages, anything else useful.
+    validations:
+      required: false
