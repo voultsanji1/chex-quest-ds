@@ -689,6 +689,7 @@ void M_SaveSelect(int choice)
     // NDS has no keyboard. Auto-name and save immediately.
     if (!savegamestrings[choice][0])
         SetDefaultSaveName(choice);
+    saveStringEnter = 0;
     M_DoSave(choice);
     return;
 #endif
