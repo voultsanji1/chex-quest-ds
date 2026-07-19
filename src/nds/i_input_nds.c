@@ -57,11 +57,10 @@ int joystick_turn_sensitivity = 0;
 //     Standard movement. Doom's default keyboard layout uses arrows for
 //     forward, backward, and turning.
 //
-//   A -> KEY_RCTRL (fire weapon) + KEY_ENTER (menu confirm)
+//   A -> KEY_RCTRL (fire weapon)
 //     RCTRL is Doom's default fire key. A is the primary action button
-//     on NDS, making it the natural fire trigger. It also sends ENTER
-//     so the same button confirms menu selections, matching the feel
-//     of console Doom ports where one button handles both roles.
+//     on NDS. It does NOT send ENTER, so firing never refreshes the
+//     status message or phantom-confirms a menu (the old bug).
 //
 //   B -> spacebar (use/open doors)
 //     Spacebar is Doom's "use" key for opening doors, flipping switches,
@@ -73,18 +72,14 @@ int joystick_turn_sensitivity = 0;
 //     the player's speed. X is above B on the NDS face buttons, easy
 //     to hold with the thumb while pressing the D-pad.
 //
-//   Y -> quick weapon cycle (next owned weapon)
-//     Doom uses number keys 1-9 for weapon selection. With limited
-//     buttons there is no room for nine direct bindings, so Y advances
-//     to the next owned weapon. For full bidirectional selection the
-//     player opens the bottom-screen weapon menu with SELECT and taps
-//     (or navigates with D-pad + A) the desired weapon.
+//   Y -> KEY_ENTER (menu confirm / save / Y-N dialog)
+//     ENTER confirms menu selections and save-game slots. It is mapped
+//     to a dedicated face button (not A) so shooting never triggers it.
 //
-//   L -> ',' (strafe left)
-//   R -> '.' (strafe right)
-//     Comma and period are Doom's default strafe keys. The shoulder
-//     buttons are ideal for strafing because they can be held while
-//     the thumb uses the D-pad for forward/backward/turning.
+//   L / R -> previous / next owned weapon
+//     Doom uses number keys 1-9 for weapon selection. The shoulder
+//     buttons cycle through the weapons you actually own, edge-triggered
+//     so one tap = one switch.
 //
 //   START -> KEY_ESCAPE (open/close menu)
 //     Standard console convention: START opens the pause/options menu.
@@ -105,11 +100,10 @@ static const keymap_t keymap[] = {
 	{ KEY_DOWN,   KEY_DOWNARROW },
 	{ KEY_LEFT,   KEY_LEFTARROW },
 	{ KEY_RIGHT,  KEY_RIGHTARROW },
-	{ KEY_A,      KEY_RCTRL },     // Fire
+	{ KEY_A,      KEY_RCTRL },     // Fire (no ENTER: avoids message-refresh / phantom menu confirm)
 	{ KEY_B,      ' ' },           // Use/Open (space)
 	{ KEY_X,      KEY_RSHIFT },    // Run
-	{ KEY_L,      ',' },           // Strafe left
-	{ KEY_R,      '.' },           // Strafe right
+	{ KEY_Y,      KEY_ENTER },     // Menu confirm / Save / Y-N dialog
 	{ KEY_START,  KEY_ESCAPE },    // Menu
 	{ KEY_SELECT, KEY_TAB },       // Automap (Doom's built-in overlay)
 };
@@ -267,23 +261,9 @@ void I_StartTic(void)
 		}
 	}
 
-	// A button dual-maps: RCTRL (fire) from the keymap table above,
-	// plus ENTER (menu confirm) here. Both events fire on the same
-	// frame so the engine sees them as simultaneous key presses.
-	if (pressed & KEY_A)
-	{
-		ev.type = ev_keydown;
-		ev.data1 = KEY_ENTER;
-		ev.data2 = ev.data3 = 0;
-		D_PostEvent(&ev);
-	}
-	if (released & KEY_A)
-	{
-		ev.type = ev_keyup;
-		ev.data1 = KEY_ENTER;
-		ev.data2 = ev.data3 = 0;
-		D_PostEvent(&ev);
-	}
+	// A button only fires (KEY_RCTRL, from the keymap table above).
+	// It no longer sends KEY_ENTER, so it does not refresh the status
+	// message or phantom-confirm menus while shooting.
 
 	// L / R switch to the previous / next owned weapon. Switching is
 	// edge-triggered: we only act on the initial press, not while the
