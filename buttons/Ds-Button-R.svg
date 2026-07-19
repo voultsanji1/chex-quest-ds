@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<svg
+   id="svg8"
+   version="1.1"
+   viewBox="0 0 23.999996 16.499998"
+   height="16.499998"
+   width="23.999996"
+   sodipodi:docname="Ds-Button-R.svg"
+   inkscape:version="1.4.3 (0d15f75, 2025-12-25)"
+   xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
+   xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
+   xmlns="http://www.w3.org/2000/svg"
+   xmlns:svg="http://www.w3.org/2000/svg">
+  <sodipodi:namedview
+     id="namedview1"
+     pagecolor="#ffffff"
+     bordercolor="#000000"
+     borderopacity="0.25"
+     inkscape:showpageshadow="2"
+     inkscape:pageopacity="0.0"
+     inkscape:pagecheckerboard="0"
+     inkscape:deskcolor="#d1d1d1"
+     inkscape:zoom="33.625"
+     inkscape:cx="12"
+     inkscape:cy="8.4907063"
+     inkscape:window-width="1920"
+     inkscape:window-height="1009"
+     inkscape:window-x="-8"
+     inkscape:window-y="-8"
+     inkscape:window-maximized="1"
+     inkscape:current-layer="svg8" />
+  <defs
+     id="defs7" />
+  <path
+     style="fill:#f3f0f1;fill-opacity:1;stroke:#a0a4a9;stroke-opacity:1"
+     id="path2285"
+     d="M 0.5,0.5 V 15.999997 H 23.499996 V 7.9999992 C 23.499996,3.8578639 20.142133,0.49999993 15.999997,0.5 Z"
+     fill="#8fa6b0"
+     fill-opacity="1"
+     stroke="#252f1f"
+     stroke-width="1px"
+     stroke-linecap="butt"
+     stroke-linejoin="miter"
+     stroke-opacity="1" />
+  <path
+     id="path817"
+     style="fill:#a0a4a9;fill-opacity:1;stroke:none;stroke-width:1"
+     d="m 13.155248,8.7614961 q 0.55013,0.1861977 1.066406,0.7955728 0.524739,0.6093741 1.049479,1.6757801 l 1.735025,3.453125 H 15.16957 L 13.553034,11.444437 Q 12.926732,10.174906 12.334284,9.7601935 11.7503,9.3454798 10.734675,9.3454798 H 8.8726965 V 14.685974 H 7.1630615 V 2.0499077 h 3.8593735 q 2.166667,0 3.233073,0.9055988 1.066407,0.9055989 1.066407,2.7337238 0,1.1933588 -0.558595,1.9804685 -0.550129,0.787109 -1.608072,1.0917973 z M 8.8726965,3.4548555 v 4.4856763 h 2.1497385 q 1.235677,0 1.86198,-0.5670568 0.634765,-0.5755204 0.634765,-1.6842447 0,-1.1087242 -0.634765,-1.6673176 -0.626303,-0.5670572 -1.86198,-0.5670572 z" />
+</svg>

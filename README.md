@@ -76,14 +76,14 @@ A, B, X, Y, L, R, START, SELECT — see
 
 | Action | Button |
 | --- | --- |
-| Move / Turn | D-pad ↑ ↓ ← → |
-| Fire | **A** |
-| Use / Open (doors, switches) | **B** |
-| Run (hold) | **X** |
-| Confirm menu / Save / Y–N dialogs | **Y** |
-| Previous / Next owned weapon | **L** / **R** |
-| Menu / Pause | **START** |
-| Automap toggle | **SELECT** |
+| Move / Turn | ![D-pad](buttons/Ds-Dpad-Neutral.svg) D-pad ↑ ↓ ← → |
+| Fire | ![A](buttons/Ds-Button-A.svg) **A** |
+| Use / Open (doors, switches) | ![B](buttons/Ds-Button-B.svg) **B** |
+| Run (hold) | ![X](buttons/Ds-Button-X.svg) **X** |
+| Confirm menu / Save / Y–N dialogs | ![Y](buttons/Ds-Button-Y.svg) **Y** |
+| Previous / Next owned weapon | ![L](buttons/Ds-Button-L.svg) **L** / ![R](buttons/Ds-Button-R.svg) **R** |
+| Menu / Pause | ![START](buttons/Ds-Button-Start.svg) **START** |
+| Automap toggle | ![SELECT](buttons/Ds-Button-Select.svg) **SELECT** |
 
 > **Note:** `A` sends only the fire key. It does **not** send `ENTER`, so
 > firing never re-shows the last on-screen message and never phantom-confirms
