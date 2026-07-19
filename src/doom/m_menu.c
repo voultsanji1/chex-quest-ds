@@ -2047,6 +2047,7 @@ void M_Drawer (void)
 void M_ClearMenus (void)
 {
     menuactive = 0;
+    saveStringEnter = 0;
     // if (!netgame && usergame && paused)
     //       sendpause = true;
 }
