@@ -32,6 +32,7 @@
 #include "doomstat.h"
 #include "doomdef.h"
 #include "d_player.h"
+#include "am_map.h"
 
 // Chocolate Doom uses D_PostEvent for the event queue
 void D_PostEvent(event_t *ev);
@@ -110,6 +111,7 @@ static const keymap_t keymap[] = {
 	{ KEY_L,      ',' },           // Strafe left
 	{ KEY_R,      '.' },           // Strafe right
 	{ KEY_START,  KEY_ESCAPE },    // Menu
+	{ KEY_SELECT, KEY_TAB },       // Automap (Doom's built-in overlay)
 };
 
 #define NUM_KEYMAPS (sizeof(keymap) / sizeof(keymap[0]))
@@ -126,11 +128,6 @@ static const keymap_t keymap[] = {
 	static int touch_down_x = 0;
 	static int touch_down_y = 0;
 	static boolean touch_dragged = false;
-
-// Bottom-screen automap state. When active, the sub (bottom) screen shows
-// an ASCII minimap of the current level instead of the diagnostic HUD.
-// Toggled by SELECT.
-static boolean automap_active = false;
 
 // True while the player holds L or R, so we only switch once per press
 // (the engine's weapon cycle is edge-triggered anyway, but this keeps the
@@ -245,46 +242,12 @@ void I_StartTic(void)
 
 	event_t ev;
 
-	// SELECT toggles the bottom-screen automap (ASCII minimap). While it
-	// is shown, gameplay input is suppressed so the player can study the
-	// map without moving.
-	if (pressed & KEY_SELECT)
-	{
-		automap_active = !automap_active;
-		NDS_Panel_SetAutomap(automap_active);
-		if (!automap_active)
-			NDS_Panel_ForceGameplayRedraw();
-		else
-		{
-			// Release any gameplay keys that were held when the map
-			// opened so the player stops moving/firing while reading it.
-			event_t ev;
-			for (unsigned int i = 0; i < NUM_KEYMAPS; i++)
-			{
-				if (held & keymap[i].nds_key)
-				{
-					ev.type = ev_keyup;
-					ev.data1 = keymap[i].doom_key;
-					ev.data2 = ev.data3 = 0;
-					D_PostEvent(&ev);
-				}
-			}
-			if (held & KEY_A)
-			{
-				ev.type = ev_keyup;
-				ev.data1 = KEY_ENTER;
-				ev.data2 = ev.data3 = 0;
-				D_PostEvent(&ev);
-			}
-		}
-	}
-
-	if (automap_active)
-	{
-		// The automap consumes all other input this frame; the
-		// touch-turn handler below is skipped while it is open.
-		return;
-	}
+	// Keep the bottom-screen HUD's automap indicator in sync with Doom's
+	// real automap state. SELECT is mapped to KEY_TAB (see the keymap
+	// table), so Doom itself toggles the automap overlay via AM_Responder;
+	// we only mirror that state here for the HUD, which avoids the input
+	// lockups a custom parallel toggle would cause.
+	NDS_Panel_SetAutomap(automapactive);
 
 	for (unsigned int i = 0; i < NUM_KEYMAPS; i++)
 	{

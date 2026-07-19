@@ -42,6 +42,11 @@ void AM_Drawer (void);
 // if the level is completed while it is up.
 void AM_Stop (void);
 
+// True while Doom's built-in automap overlay is active. Exposed so that
+// platform layers (e.g. the NDS HUD) can reflect the real automap state
+// instead of tracking their own parallel flag.
+extern boolean automapactive;
+
 
 extern cheatseq_t cheat_amap;
 
